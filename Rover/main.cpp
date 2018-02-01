@@ -1,3 +1,13 @@
+/*
+  The purpose of this module is to allow the co-processor for the Rover to
+  gather the necessary data for the ML algorithm to make decisions with as
+  Little load on the primary CPU as possible.
+
+  This module collects data from several sensors and the outputs it over serial
+  And is collected by a python script and stored into a database for later use
+  And analysis.
+ */
+
 #include <Arduino.h>
 #include "Wire.h"
 #include <Adafruit_Sensor.h>
