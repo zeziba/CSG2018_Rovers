@@ -34,9 +34,9 @@ SoftwareSerial xb = SoftwareSerial(6, 5);
 XBee xbee = XBee();
 Rx16Response rx16 = Rx16Response();
 int resetRSSI = -1000;    //The value that RSSI is reset to after each pass through filter
-#define samples 110
+#define samples 20
 int temp, smoothData, rawData;
-int timeToScan = 2000;
+int timeToScan = 220;
 short currentHeading;
 
 //Variable for i2c comms
@@ -57,7 +57,7 @@ union{
 //////////////////////////////////
 
 // Timers to run different FUNCTIONS
-uint16_t compass = 2500;
+uint16_t compass = 5000;
 uint8_t detection = 120;
 unsigned long last_check_compass;
 unsigned long last_check_detection;
@@ -257,7 +257,7 @@ int ProcessData(){
   {
     if (readings[i].signalStrength == -1000 && readings[i].heading == 0)
     {
-       Serial.println("this heading not included");
+       //Serial.println("this heading not included");
     }
     else
     {
@@ -371,8 +371,8 @@ void loop() {
     if (now - last_check_compass > compass)
     {
       getSamples();
-      last_check_compass = millis();
-      currentHeading = ProcessData();
+      reg.bHeading = ProcessData();
+      last_check_compass = now;
     }
 
     if (millis() - serialCommTimer > serialCommSpeed) {
