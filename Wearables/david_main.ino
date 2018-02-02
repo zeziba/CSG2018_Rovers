@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_GPS.h>
+#include <SPI.h>
+#include <SD.h>
 
 SoftwareSerial mySerial(0, 1);
 Adafruit_GPS GPS(&mySerial);
@@ -42,6 +44,26 @@ uint8_t draw_color = 1;
 
 uint32_t timer = millis();
 
+File data;
+
+void save_data(float lng, float lat, double spd, double alt, double angle, int sats) {
+  data = SD.open("data.csv", FILE_WRITE);
+
+  data.print(lng);
+  data.print(',');
+  data.print(lat);
+  data.print(',');
+  data.print(spd);
+  data.print(',');
+  data.print(sats);
+  data.print(',');
+  data.print(alt);
+  data.print(',');
+  data.println(angle);
+
+  data.close();
+}
+
 void setup() {
   // put your setup code here, to run once:
 
@@ -56,6 +78,24 @@ void setup() {
   display.display();
   delay(250);
   display.clearDisplay();
+
+  Serial.print("Initializing SD card...");
+
+  if (!SD.begin(4)) {
+    Serial.println("initialization failed!");
+    while (1);
+  }
+  Serial.println("initialization done.");
+
+  data = SD.open("data.csv", FILE_WRITE);
+
+  if (data) {
+    Serial.println("data.csv exists and is now closed");
+    data.close();
+  } else {
+    // if the file didn't open, print an error:
+    Serial.println("error opening data.csv");
+  }
 
   // show_result("Adafruit GPS library basic test!");
 
@@ -144,6 +184,8 @@ void loop() {
       Serial.print(alt);
       Serial.print(',');
       Serial.println(angle);
+
+      save_data(lng, lat, spd, alt, angle, sats);
     }
   }
 }
