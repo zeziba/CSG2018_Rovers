@@ -1,5 +1,7 @@
 #include <SPI.h>
 #include <SD.h>
+#include <Adafruit_GPS.h>
+#include <SoftwareSerial.h>
 
 #define PROCESSING_VISUALIZER 1
 #define SERIAL_PLOTTER  2
@@ -13,8 +15,12 @@ int pulsePin = A1;                 // Pulse Sensor purple wire connected to anal
 int blinkPin = 13;                // pin to blink led at each beat
 int fadeRate = 0;                 // used to fade LED on with PWM on fadePin
 float tVoltage = 1.75;            // Max output voltage of the Temp sensor
-float cModTempVolt = 0.55;
+float cModTempVolt = 0.53;
 bool header = false;
+float temps[20] = {};
+int t_i = 0;
+int n = 0;
+char logFileName[16] = {'d', 'a', 't', 'a', '0', '.', 'c', 's', 'v'};
 
 // Volatile Variables, used in the interrupt service routine!
 volatile int BPM;                   // int that holds raw Analog in 0. updated every 2mS
@@ -25,9 +31,58 @@ volatile boolean QS = false;        // becomes true when Arduoino finds a beat.
 
 static int outputType = SERIAL_PLOTTER;
 
-uint32_t timer = millis();
+uint32_t time = millis();
 
 File data;
+
+// Adafruit GPS code
+// Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
+// Set to 'true' if you want to debug and listen to the raw GPS sentences.
+#define GPSECHO  true
+
+SoftwareSerial mySerial(3, 4);
+
+Adafruit_GPS GPS(&mySerial);
+boolean usingInterrupt = false;
+void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
+
+// Interrupt is called once a millisecond, looks for any new GPS data, and stores it
+SIGNAL(TIMER0_COMPA_vect) {
+  char c = GPS.read();
+  // if you want to debug, this is a good time to do it!
+#ifdef UDR0
+  if (GPSECHO)
+    if (c) UDR0 = c;
+    // writing direct to UDR0 is much much faster than Serial.print
+    // but only one character can be written at a time.
+#endif
+}
+
+uint32_t timer_0 = millis();
+
+void useInterrupt(boolean v) {
+  if (v) {
+    // Timer0 is already used for millis() - we'll just interrupt somewhere
+    // in the middle and call the "Compare A" function above
+    OCR0A = 0xAF;
+    TIMSK0 |= _BV(OCIE0A);
+    usingInterrupt = true;
+  } else {
+    // do not call the interrupt function COMPA anymore
+    TIMSK0 &= ~_BV(OCIE0A);
+    usingInterrupt = false;
+  }
+}
+// End Adafruit GPS
+
+float avg_Temp(float tempArray[]) {
+  float total = 0;
+  int i = 0;
+  for (i; i < 20;)
+    total += tempArray[i++];
+
+  return total / (float)i;
+}
 
 float map_(float x, float in_min, float in_max, float out_min, float out_max)
 {
@@ -56,7 +111,7 @@ void debugPrint(float voltage, float celsius, float fahrenheit, float BPM, float
 }
 
 void save_data(float BPM, float IBI, float Signal, float voltage, float celsius, double fahrenheit) {
-  data = SD.open("data.csv", FILE_WRITE);
+  data = SD.open(logFileName, FILE_WRITE);
 
   if (!header)
   {
@@ -111,17 +166,24 @@ void setup(){
   }
   Serial.println("initialization done.");
 
-  data = SD.open("data.csv", FILE_WRITE);
+  Serial.println("Locating new file.");
+  int n = 0;
+  while (SD.exists(logFileName))
+    sprintf(logFileName, "data%d.csv", ++n);
+  data = SD.open(logFileName, FILE_WRITE);
 
   if (data) {
-    Serial.println("data.csv exists and is now closed");
+    Serial.print(logFileName);
+    Serial.println(" exists and is now closed");
     data.close();
   } else {
     // if the file didn't open, print an error:
-    Serial.println("error opening data.csv");
+    Serial.print("error opening ");
+    Serial.println(logFileName);
   }
 
   delay(2500);    // Delay to allow everything to start properly.
+
 }
 
 
@@ -135,9 +197,13 @@ void loop(){
   rawTemp = analogRead(sensorPin);
   voltage = rawTemp / 1024.0 * tVoltage;
   if (voltage - cModTempVolt > 0)
-    celsius = map_(voltage - cModTempVolt, 0.0, 1.75, 0.0, 125.0);
+    celsius = map_(voltage - cModTempVolt, 0.0, tVoltage, 0.0, 125.0);
   else
     celsius = map_(voltage - cModTempVolt, -cModTempVolt, 0.0, 0.0, -40.0);
+  temps[t_i++] = celsius;
+  if (t_i > 20)
+    t_i = 0;
+  celsius = avg_Temp(temps);
   fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
   delay(1000);
 
@@ -157,4 +223,6 @@ void loop(){
     debugPrint(voltage, celsius, fahrenheit, BPM, IBI, Signal);
 
   delay(400);                             //  take a break
+
+
 }
