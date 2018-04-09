@@ -11,7 +11,10 @@
 #define STEPPERCOILB1 6
 #define STEPPERCOILB2 7
 
-char inByte;
+#define ASEN A1
+#define BSEN A2
+
+char inByte = REV;
 
 const int STEPS = 400;
 const int microSteps = 2;
@@ -29,14 +32,19 @@ int turningDistance = STEPS / 3 ;
 
 Stepper stepper1(STEPS, STEPPERCOILA1, STEPPERCOILA2, STEPPERCOILB1, STEPPERCOILB2);
 
-void goForward(Stepper *stepper, const int speed, const int step) {
-  stepper->setSpeed(speed);
-  stepper->step(step);
+double map_(double x, double in_min, double in_max, double out_min, double out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-void goBackwards(Stepper *stepper, const int speed, const int step) {
-  stepper->setSpeed(speed);
-  stepper->step(step);
+void goForward(Stepper *stepper, const int spd, const int stp) {
+  stepper->setSpeed(spd);
+  stepper->step(stp);
+}
+
+void goBackwards(Stepper *stepper, const int spd, const int stp) {
+  stepper->setSpeed(spd);
+  stepper->step(stp);
 }
 
 void receiveEvent(int bytes){
@@ -45,11 +53,13 @@ void receiveEvent(int bytes){
 
 void doStuff(int distance) {
   if (inByte == (char)FWD)
-    goForward(&stepper1, STEPS, distance);
+    goForward(&stepper1, motorRPM, distance);
   else
-    goBackwards(&stepper1, STEPS, distance);
+    goBackwards(&stepper1, motorRPM, distance);
   Serial.print("I did stuff: ");
-  Serial.println();
+  Serial.print(map_(analogRead(ASEN), 0, 1023, 0, 5));
+  Serial.print(" ");
+  Serial.println(map_(analogRead(BSEN), 0, 1023, 0, 5));
 }
 
 void setup(){
@@ -59,9 +69,12 @@ void setup(){
   Wire.begin(SLAVEID);
   Wire.onReceive(receiveEvent);
 
+  pinMode(ASEN, INPUT);
+  pinMode(BSEN, INPUT);
+
   delay(1000);
   Serial.println("End Init, Success");
-  Serial.end();
+  //`Serial.end();
 }
 
 void loop()
